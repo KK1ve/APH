@@ -1,3 +1,4 @@
+import sys
 from typing import List, Dict
 
 import torch
@@ -12,14 +13,33 @@ class APH(torch.nn.Module):
     def forward(self, *args, **kwargs) -> Dict:
         """
         :param args:  层级列表 从最大层级开始  e.g. [metrics_one, metrics_two]
-        :param kwargs:  模糊综合判断矩阵 e.g. {metrics_one: List[torch.Tensor], metrics_two: List[torch.Tensor]}
+        :param kwargs:  模糊综合判断矩阵 e.g. {metrics_one: List[[index], [groups], List[torch.Tensor]], metrics_two: List[[index], [groups], List[torch.Tensor]]}
 
         :return:
 
         """
         args = args[0]
 
-        result_dict = {args[i]: [self.consistency_checks(z) for z in kwargs[args[i]]] for i in range(len(args))}
+        result_dict = {args[0]: [self.consistency_checks(z) for z in kwargs[args[0]][2]]}
+
+        if len(args) <= 1:
+            return result_dict
+
+        for metrics_index in range(1, len(args)):
+            groups = kwargs[args[metrics_index]][1]
+            index = kwargs[args[metrics_index]][0]
+            rest_list = kwargs[args[metrics_index]][2]
+            result_dict[args[metrics_index]] = []
+
+            for gap_index in range(len(groups)):
+                gap = groups[gap_index]
+                current_list = rest_list[:gap]
+                rest_list = rest_list[gap:]
+                for matrix_index in range(len(current_list)):
+                    matrix_result = self.consistency_checks(current_list[matrix_index])
+                    print(result_dict[args[metrics_index - 1]][index[gap_index]]["W"][matrix_index])
+                    matrix_result["combine_W"] = result_dict[args[metrics_index-1]][index[gap_index]]["W"][matrix_index] * matrix_result["W"]
+                    result_dict[args[metrics_index]].append(matrix_result)
 
         print(result_dict)
         return result_dict
@@ -49,6 +69,6 @@ class APH(torch.nn.Module):
             # 一致性比率 CR
             CR = CI / RI
         else:
-            CR = torch.tensor(0)
+            CR = torch.tensor(0.)
 
         return {"W": W, "eigen_max": eigen_max, "CR": CR}
