@@ -12,35 +12,40 @@ class APH(torch.nn.Module):
 
     def forward(self, *args, **kwargs) -> Dict:
         """
-        :param args:  层级列表 从最大层级开始  e.g. [metrics_one, metrics_two]
-        :param kwargs:  模糊综合判断矩阵 e.g. {metrics_one: List[[groups], List[torch.Tensor]], metrics_two: List[[groups], List[torch.Tensor]]}
+        :param args:  层级列表 从最大层级开始  e.g. [metrics_one, metrics_two, assessment_sheet(最后的评价问卷表)]
+        :param kwargs:  模糊综合判断矩阵 e.g. {metrics_one: List[torch.Tensor], metrics_two: List[torch.Tensor],
+        assessment_sheet: List[torch.Tensor]}
 
         :return:
 
         """
         args = args[0]
 
-        result_dict = {args[0]: [self.consistency_checks(z) for z in kwargs[args[0]][1]]}
+        result_dict = {args[0]: [self.consistency_checks(z) for z in kwargs[args[0]]]}
 
-        if len(args) <= 1:
-            return result_dict
-
-        for metrics_index in range(1, len(args)):
-            groups = kwargs[args[metrics_index]][0]
-            rest_list = kwargs[args[metrics_index]][1]
-            result_dict[args[metrics_index]] = []
-
-            for gap_index in range(len(groups)):
-                gap = groups[gap_index]
-                current_list = rest_list[:gap]
-                rest_list = rest_list[gap:]
+        for metrics_index in range(1, len(args)-1):
+            metrics = args[metrics_index]
+            matrix_list = kwargs[metrics]
+            result_dict[metrics] = []
+            for f in result_dict[args[metrics_index-1]]:
+                fw = f["combine_W"] if "combine_W" in f.keys() else f["W"]
+                current_list = matrix_list[:len(fw)]
+                matrix_list = matrix_list[len(fw):]
                 for matrix_index in range(len(current_list)):
-                    matrix_result = self.consistency_checks(current_list[matrix_index])
-                    print(result_dict[args[metrics_index - 1]][gap_index]["W"][matrix_index])
-                    matrix_result["combine_W"] = result_dict[args[metrics_index-1]][gap_index]["W"][matrix_index] * matrix_result["W"]
+                    matrix = current_list[matrix_index]
+                    matrix_result = self.consistency_checks(matrix)
+                    matrix_result["combine_W"] = fw[matrix_index] * matrix_result["W"]
                     result_dict[args[metrics_index]].append(matrix_result)
 
-        print(result_dict)
+        S = torch.mm(result_dict[args[-2]][0]["W"].T, kwargs[args[-1]][0])
+
+        for matrix_index in range(1, len(kwargs[args[-1]])):
+            matrix = kwargs[args[-1]][matrix_index]
+            S = torch.cat((S, torch.mm(result_dict[args[-2]][matrix_index]["W"].T, matrix)), dim=0)
+
+        result_dict[args[-1]] = [torch.mm(result_dict[args[0]][0]["W"].T, S)]
+
+
         return result_dict
 
 
