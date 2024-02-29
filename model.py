@@ -13,22 +13,21 @@ class APH(torch.nn.Module):
     def forward(self, *args, **kwargs) -> Dict:
         """
         :param args:  层级列表 从最大层级开始  e.g. [metrics_one, metrics_two]
-        :param kwargs:  模糊综合判断矩阵 e.g. {metrics_one: List[[index], [groups], List[torch.Tensor]], metrics_two: List[[index], [groups], List[torch.Tensor]]}
+        :param kwargs:  模糊综合判断矩阵 e.g. {metrics_one: List[[groups], List[torch.Tensor]], metrics_two: List[[groups], List[torch.Tensor]]}
 
         :return:
 
         """
         args = args[0]
 
-        result_dict = {args[0]: [self.consistency_checks(z) for z in kwargs[args[0]][2]]}
+        result_dict = {args[0]: [self.consistency_checks(z) for z in kwargs[args[0]][1]]}
 
         if len(args) <= 1:
             return result_dict
 
         for metrics_index in range(1, len(args)):
-            groups = kwargs[args[metrics_index]][1]
-            index = kwargs[args[metrics_index]][0]
-            rest_list = kwargs[args[metrics_index]][2]
+            groups = kwargs[args[metrics_index]][0]
+            rest_list = kwargs[args[metrics_index]][1]
             result_dict[args[metrics_index]] = []
 
             for gap_index in range(len(groups)):
@@ -37,8 +36,8 @@ class APH(torch.nn.Module):
                 rest_list = rest_list[gap:]
                 for matrix_index in range(len(current_list)):
                     matrix_result = self.consistency_checks(current_list[matrix_index])
-                    print(result_dict[args[metrics_index - 1]][index[gap_index]]["W"][matrix_index])
-                    matrix_result["combine_W"] = result_dict[args[metrics_index-1]][index[gap_index]]["W"][matrix_index] * matrix_result["W"]
+                    print(result_dict[args[metrics_index - 1]][gap_index]["W"][matrix_index])
+                    matrix_result["combine_W"] = result_dict[args[metrics_index-1]][gap_index]["W"][matrix_index] * matrix_result["W"]
                     result_dict[args[metrics_index]].append(matrix_result)
 
         print(result_dict)
